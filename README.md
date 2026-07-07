@@ -50,3 +50,22 @@ tests/
 Historical Period:
 
 2015-01-01 → 2026-06-30
+
+## Results
+
+The project successfully:
+
+- Collected financial data from Yahoo Finance
+- Performed preprocessing and exploratory analysis
+- Conducted stationarity testing
+- Built an ARIMA forecasting model
+- Forecasted future prices with confidence intervals
+- Optimized the investment portfolio using Modern Portfolio Theory
+- Evaluated the optimized portfolio against a benchmark through backtesting
+
+## Future Improvements
+
+- Compare ARIMA with LSTM and Prophet
+- Include additional ETFs and stocks
+- Perform rolling-window backtesting
+- Build an interactive dashboard
