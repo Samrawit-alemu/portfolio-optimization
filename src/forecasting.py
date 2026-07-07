@@ -175,3 +175,248 @@ def evaluate(test, prediction):
         "RMSE": rmse,
         "MAPE": mape,
     }
+
+# ==========================================================
+# FUTURE FORECAST
+# ==========================================================
+
+def forecast_future(model, periods=252):
+    """
+    Forecast future prices.
+
+    252 trading days ≈ 12 months
+    126 trading days ≈ 6 months
+    """
+
+    forecast = model.get_forecast(steps=periods)
+
+    future = forecast.predicted_mean
+
+    confidence = forecast.conf_int()
+
+    return future, confidence
+
+
+# ==========================================================
+# PLOTTING FUNCTIONS
+# ==========================================================
+
+def plot_test_prediction(train, test, prediction, ticker):
+
+    plt.figure(figsize=(15,6))
+
+    plt.plot(train.index, train.values,
+             label="Train", linewidth=2)
+
+    plt.plot(test.index, test.values,
+             label="Actual", linewidth=2)
+
+    plt.plot(test.index, prediction,
+             label="Prediction", linewidth=2)
+
+    plt.title(f"{ticker} Test Forecast")
+
+    plt.xlabel("Date")
+
+    plt.ylabel("Price")
+
+    plt.grid(True)
+
+    plt.legend()
+
+    plt.tight_layout()
+
+    plt.savefig(
+        FORECAST_DIR / f"{ticker}_test_prediction.png",
+        dpi=300
+    )
+
+    plt.show()
+
+
+def plot_future_forecast(
+        df,
+        future,
+        confidence,
+        ticker):
+
+    plt.figure(figsize=(15,6))
+
+    plt.plot(
+        df.index,
+        df["Close"],
+        label="Historical",
+        linewidth=2
+    )
+
+    future_dates = pd.date_range(
+        start=df.index[-1] + pd.Timedelta(days=1),
+        periods=len(future),
+        freq="B"
+    )
+
+    plt.plot(
+        future_dates,
+        future,
+        label="Forecast",
+        linewidth=2,
+        color="red"
+    )
+
+    plt.fill_between(
+        future_dates,
+        confidence.iloc[:,0],
+        confidence.iloc[:,1],
+        alpha=0.30,
+        label="95% Confidence Interval"
+    )
+
+    plt.title(f"{ticker} Future Forecast")
+
+    plt.xlabel("Date")
+
+    plt.ylabel("Price")
+
+    plt.grid(True)
+
+    plt.legend()
+
+    plt.tight_layout()
+
+    plt.savefig(
+        FORECAST_DIR / f"{ticker}_future_forecast.png",
+        dpi=300
+    )
+
+    plt.show()
+
+    # ==========================================================
+# FORECAST SUMMARY
+# ==========================================================
+
+def summarize_forecast(future):
+
+    first_price = future.iloc[0]
+
+    last_price = future.iloc[-1]
+
+    expected_return = (
+        (last_price - first_price)
+        / first_price
+    )
+
+    print("="*60)
+
+    print("Forecast Summary")
+
+    print("="*60)
+
+    print(f"Forecast Start Price : {first_price:.2f}")
+
+    print(f"Forecast End Price   : {last_price:.2f}")
+
+    print(f"Expected Return      : {expected_return:.2%}")
+
+    print("="*60)
+
+    return expected_return
+
+# ==========================================================
+# TREND ANALYSIS
+# ==========================================================
+
+def analyze_trend(future):
+
+    start = future.iloc[0]
+
+    end = future.iloc[-1]
+
+    if end > start:
+
+        trend = "Upward Trend"
+
+    elif end < start:
+
+        trend = "Downward Trend"
+
+    else:
+
+        trend = "Stable Trend"
+
+    return trend
+
+
+def confidence_analysis(confidence):
+
+    width = (
+        confidence.iloc[:,1]
+        - confidence.iloc[:,0]
+    )
+
+    if width.iloc[-1] > width.iloc[0]:
+
+        message = (
+            "Confidence interval widens over time, "
+            "indicating increasing uncertainty "
+            "for long-term forecasts."
+        )
+
+    else:
+
+        message = (
+            "Confidence interval remains relatively "
+            "stable over the forecast horizon."
+        )
+
+    return message
+
+
+def market_insight(expected_return):
+
+    if expected_return > 0.15:
+
+        opportunity = (
+            "Strong expected growth. Potential buying opportunity."
+        )
+
+    elif expected_return > 0:
+
+        opportunity = (
+            "Moderate expected growth."
+        )
+
+    else:
+
+        opportunity = (
+            "Negative expected return."
+        )
+
+    return opportunity
+
+
+def market_risk(confidence):
+
+    width = (
+        confidence.iloc[:,1]
+        - confidence.iloc[:,0]
+    ).mean()
+
+    if width > 50:
+
+        risk = (
+            "High uncertainty and volatility."
+        )
+
+    elif width > 20:
+
+        risk = (
+            "Moderate uncertainty."
+        )
+
+    else:
+
+        risk = (
+            "Relatively stable forecast."
+        )
+
+    return risk
