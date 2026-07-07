@@ -1,109 +1,177 @@
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from pathlib import Path
+
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    mean_absolute_percentage_error,
+)
+
 from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.arima.model import ARIMA
 
 from pmdarima import auto_arima
 
-from statsmodels.tsa.arima.model import ARIMA
 
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
+# ==========================================================
+# PATHS
+# ==========================================================
 
-import numpy as np
+PROCESSED_DATA_DIR = Path("data/processed")
+FORECAST_DIR = Path("outputs/forecast")
 
+FORECAST_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ==========================================================
+# DATA LOADING
+# ==========================================================
+
+def load_dataset(ticker: str):
+
+    file = PROCESSED_DATA_DIR / f"{ticker}.csv"
+
+    df = pd.read_csv(file)
+
+    df["Date"] = pd.to_datetime(df["Date"])
+
+    df.sort_values("Date", inplace=True)
+
+    df.set_index("Date", inplace=True)
+
+    return df
+
+
+# ==========================================================
+# STATIONARITY
+# ==========================================================
 
 def adf_test(series):
 
     result = adfuller(series.dropna())
 
     print("=" * 60)
+
     print("ADF Statistic :", result[0])
-    print("p-value :", result[1])
+
+    print("P-value :", result[1])
+
+    print()
 
     if result[1] < 0.05:
-        print("Result : Stationary")
+        print("Series is Stationary")
     else:
-        print("Result : Non-Stationary")
+        print("Series is NOT Stationary")
+
+    print("=" * 60)
+
+    return result
 
 
-def difference(df):
+def difference(series):
 
-    df = df.copy()
-
-    df["Differenced"] = df["Close"].diff()
-
-    return df
+    return series.diff().dropna()
 
 
-def plot_difference(df, ticker):
+# ==========================================================
+# TRAIN TEST SPLIT
+# ==========================================================
 
-    plt.figure(figsize=(12,5))
+def split_data(df, train_ratio=0.80):
 
-    plt.plot(df["Date"], df["Differenced"])
+    n = int(len(df) * train_ratio)
 
-    plt.title(f"{ticker} Differenced Series")
+    train = df.iloc[:n]
 
-    plt.grid()
+    test = df.iloc[n:]
 
-    plt.show()
+    return train, test
 
-def split_data(df):
 
-    train_size=int(len(df)*0.8)
+# ==========================================================
+# AUTO ARIMA
+# ==========================================================
 
-    train=df["Close"][:train_size]
+def find_best_order(train):
 
-    test=df["Close"][train_size:]
+    print("Searching best ARIMA order...")
 
-    return train,test
-def train_model(train):
-
-    auto_model=auto_arima(
+    model = auto_arima(
         train,
         seasonal=False,
         trace=True,
-        suppress_warnings=True
+        suppress_warnings=True,
+        error_action="ignore",
+        stepwise=True,
     )
 
-    order=auto_model.order
+    print()
 
-    print("Best Order:",order)
+    print("Best Order :", model.order)
 
-    model=ARIMA(train,order=order)
+    return model.order
 
-    fitted=model.fit()
+
+# ==========================================================
+# MODEL TRAINING
+# ==========================================================
+
+def train_arima(train):
+
+    order = find_best_order(train)
+
+    model = ARIMA(train, order=order)
+
+    fitted = model.fit()
 
     return fitted
 
-def evaluate(model,test):
 
-    forecast=model.forecast(len(test))
+# ==========================================================
+# TEST FORECAST
+# ==========================================================
 
-    mae=mean_absolute_error(test,forecast)
+def predict_test(model, test):
 
-    rmse=np.sqrt(mean_squared_error(test,forecast))
+    forecast = model.get_forecast(steps=len(test))
 
-    print("MAE :",mae)
+    prediction = forecast.predicted_mean
 
-    print("RMSE :",rmse)
+    confidence = forecast.conf_int()
 
-    return forecast
+    return prediction, confidence
 
-def plot_forecast(train,test,forecast,ticker):
 
-    plt.figure(figsize=(12,5))
+# ==========================================================
+# EVALUATION
+# ==========================================================
 
-    plt.plot(train.index,train,label="Train")
+def evaluate(test, prediction):
 
-    plt.plot(test.index,test,label="Actual")
+    mae = mean_absolute_error(test, prediction)
 
-    plt.plot(test.index,forecast,label="Forecast")
+    rmse = np.sqrt(mean_squared_error(test, prediction))
 
-    plt.title(ticker)
+    mape = mean_absolute_percentage_error(test, prediction)
 
-    plt.legend()
+    print("=" * 60)
 
-    plt.grid()
+    print("MAE :", round(mae, 4))
 
-    plt.show()
+    print("RMSE :", round(rmse, 4))
+
+    print("MAPE :", round(mape, 4))
+
+    print("=" * 60)
+
+    return {
+        "MAE": mae,
+        "RMSE": rmse,
+        "MAPE": mape,
+    }
